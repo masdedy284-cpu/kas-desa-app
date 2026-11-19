@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import {
   Warga,
   IuranBulanan,
@@ -13,6 +13,7 @@ import {
   StatusKehadiran,
 } from "./types";
 import {
+  BLOK_OPTIONS,
   initialSettings,
   initialWarga,
   initialIuran,
@@ -86,7 +87,250 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isSupabaseOnline, setIsSupabaseOnline] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
-  // Initialize from LocalStorage or Fallback
+  const isSeedingRef = useRef(false);
+
+  // 1. Fetch data from Supabase
+  const loadFromSupabase = useCallback(async () => {
+    if (!isSupabaseConfigured || !supabase) return false;
+
+    try {
+      const [
+        { data: dbWarga, error: wargaErr },
+        { data: dbIuran, error: iuranErr },
+        { data: dbTransaksi, error: txErr },
+        { data: dbKegiatan, error: kgErr },
+        { data: dbAbsensi, error: absErr },
+        { data: dbSettings, error: setErr },
+      ] = await Promise.all([
+        supabase.from("warga").select("*").order("nama"),
+        supabase.from("iuran_bulanan").select("*"),
+        supabase.from("transaksi_kas").select("*").order("tanggal", { ascending: false }),
+        supabase.from("kegiatan_desa").select("*").order("tanggal", { ascending: false }),
+        supabase.from("absensi_kegiatan").select("*"),
+        supabase.from("pengaturan_desa").select("*").eq("id", 1).maybeSingle(),
+      ]);
+
+      if (wargaErr || iuranErr || txErr || kgErr || absErr) {
+        console.warn("Supabase fetch warning:", { wargaErr, iuranErr, txErr, kgErr, absErr, setErr });
+        return false;
+      }
+
+      // Check if DB is completely empty (first time setup)
+      if ((!dbWarga || dbWarga.length === 0) && !isSeedingRef.current) {
+        isSeedingRef.current = true;
+        console.log("Database Supabase masih kosong. Melakukan inisialisasi data awal (seeding)...");
+        await seedInitialDataToSupabase();
+        isSeedingRef.current = false;
+        return true;
+      }
+
+      if (dbWarga && dbWarga.length > 0) {
+        setWargaList(
+          dbWarga.map((w) => ({
+            id: w.id,
+            nik: w.nik,
+            nama: w.nama,
+            blok: w.blok || w.rt || "Blok A1",
+            rt: w.rt || w.blok || "Blok A1",
+            rw: w.rw || "RW 01",
+            no_hp: w.no_hp || "",
+            alamat: w.alamat || "",
+            status_kk: w.status_kk || "Kepala Keluarga",
+            status_iuran: w.status_iuran || "aktif",
+            pekerjaan: w.pekerjaan || "",
+            created_at: w.created_at,
+          }))
+        );
+      }
+
+      if (dbIuran) {
+        setIuranList(
+          dbIuran.map((i) => ({
+            id: i.id,
+            warga_id: i.warga_id,
+            tahun: Number(i.tahun),
+            bulan: Number(i.bulan),
+            nominal: Number(i.nominal),
+            status: i.status,
+            tanggal_bayar: i.tanggal_bayar,
+            metode_bayar: i.metode_bayar,
+            catatan: i.catatan || "",
+            dicatat_oleh: i.dicatat_oleh || "",
+            kwitansi_no: i.kwitansi_no || "",
+          }))
+        );
+      }
+
+      if (dbTransaksi) {
+        setTransaksiList(
+          dbTransaksi.map((t) => ({
+            id: t.id,
+            tanggal: t.tanggal,
+            tipe: t.tipe,
+            kategori: t.kategori,
+            nominal: Number(t.nominal),
+            uraian: t.uraian,
+            penanggung_jawab: t.penanggung_jawab,
+            bukti_nota: t.bukti_nota,
+            saldo_setelah: Number(t.saldo_setelah),
+            created_at: t.created_at,
+          }))
+        );
+      }
+
+      if (dbKegiatan) {
+        setKegiatanList(
+          dbKegiatan.map((k) => ({
+            id: k.id,
+            nama_kegiatan: k.nama_kegiatan,
+            tanggal: k.tanggal,
+            waktu: k.waktu,
+            lokasi: k.lokasi,
+            kategori: k.kategori,
+            deskripsi: k.deskripsi || "",
+            penanggung_jawab: k.penanggung_jawab || "",
+            status_kegiatan: k.status_kegiatan || "selesai",
+          }))
+        );
+      }
+
+      if (dbAbsensi) {
+        setAbsensiList(
+          dbAbsensi.map((a) => ({
+            id: a.id,
+            kegiatan_id: a.kegiatan_id,
+            warga_id: a.warga_id,
+            status: a.status,
+            waktu_absen: a.waktu_absen || "",
+            keterangan: a.keterangan || "",
+          }))
+        );
+      }
+
+      if (dbSettings) {
+        setSettings((prev) => ({
+          ...prev,
+          nama_desa: dbSettings.nama_desa || prev.nama_desa,
+          dusun: dbSettings.dusun || prev.dusun,
+          rw: dbSettings.rw || prev.rw,
+          kecamatan: dbSettings.kecamatan || prev.kecamatan,
+          kabupaten: dbSettings.kabupaten || prev.kabupaten,
+          provinsi: dbSettings.provinsi || prev.provinsi,
+          kepala_desa: dbSettings.kepala_desa || prev.kepala_desa,
+          bendahara: dbSettings.bendahara || prev.bendahara,
+          sekretaris: dbSettings.sekretaris || prev.sekretaris,
+          nominal_iuran_bulanan: Number(dbSettings.nominal_iuran_bulanan) || prev.nominal_iuran_bulanan,
+          tahun_aktif: Number(dbSettings.tahun_aktif) || prev.tahun_aktif,
+          blok_list: prev.blok_list || BLOK_OPTIONS,
+          rt_list: prev.rt_list || BLOK_OPTIONS,
+        }));
+      }
+
+      setIsSupabaseOnline(true);
+      return true;
+    } catch (err) {
+      console.error("Gagal sinkronisasi data dari Supabase:", err);
+      setIsSupabaseOnline(false);
+      return false;
+    }
+  }, []);
+
+  // Seed default data into Supabase if freshly created
+  const seedInitialDataToSupabase = async () => {
+    if (!isSupabaseConfigured || !supabase) return;
+    try {
+      await supabase.from("pengaturan_desa").upsert({
+        id: 1,
+        nama_desa: initialSettings.nama_desa,
+        dusun: initialSettings.dusun,
+        rw: initialSettings.rw || "RW 01",
+        kecamatan: initialSettings.kecamatan,
+        kabupaten: initialSettings.kabupaten,
+        provinsi: initialSettings.provinsi,
+        kepala_desa: initialSettings.kepala_desa,
+        bendahara: initialSettings.bendahara,
+        sekretaris: initialSettings.sekretaris,
+        nominal_iuran_bulanan: initialSettings.nominal_iuran_bulanan,
+        tahun_aktif: initialSettings.tahun_aktif,
+      });
+
+      await supabase.from("warga").upsert(
+        initialWarga.map((w) => ({
+          id: w.id,
+          nik: w.nik,
+          nama: w.nama,
+          blok: w.blok,
+          rt: w.rt || w.blok,
+          rw: w.rw || "RW 01",
+          no_hp: w.no_hp,
+          alamat: w.alamat,
+          status_kk: w.status_kk,
+          status_iuran: w.status_iuran,
+          pekerjaan: w.pekerjaan,
+        }))
+      );
+
+      await supabase.from("iuran_bulanan").upsert(
+        initialIuran.map((i) => ({
+          id: i.id,
+          warga_id: i.warga_id,
+          tahun: i.tahun,
+          bulan: i.bulan,
+          nominal: i.nominal,
+          status: i.status,
+          tanggal_bayar: i.tanggal_bayar,
+          metode_bayar: i.metode_bayar,
+          catatan: i.catatan,
+          dicatat_oleh: i.dicatat_oleh,
+          kwitansi_no: i.kwitansi_no,
+        }))
+      );
+
+      await supabase.from("transaksi_kas").upsert(
+        initialTransaksi.map((t) => ({
+          id: t.id,
+          tanggal: t.tanggal,
+          tipe: t.tipe,
+          kategori: t.kategori,
+          nominal: t.nominal,
+          uraian: t.uraian,
+          penanggung_jawab: t.penanggung_jawab,
+          saldo_setelah: t.saldo_setelah,
+        }))
+      );
+
+      await supabase.from("kegiatan_desa").upsert(
+        initialKegiatan.map((k) => ({
+          id: k.id,
+          nama_kegiatan: k.nama_kegiatan,
+          tanggal: k.tanggal,
+          waktu: k.waktu,
+          lokasi: k.lokasi,
+          kategori: k.kategori,
+          deskripsi: k.deskripsi,
+          penanggung_jawab: k.penanggung_jawab,
+          status_kegiatan: k.status_kegiatan,
+        }))
+      );
+
+      await supabase.from("absensi_kegiatan").upsert(
+        initialAbsensi.map((a) => ({
+          id: a.id,
+          kegiatan_id: a.kegiatan_id,
+          warga_id: a.warga_id,
+          status: a.status,
+          waktu_absen: a.waktu_absen,
+          keterangan: a.keterangan,
+        }))
+      );
+
+      setIsSupabaseOnline(true);
+    } catch (e) {
+      console.error("Gagal melakukan seeding data ke Supabase:", e);
+    }
+  };
+
+  // Initialize from LocalStorage or Supabase
   useEffect(() => {
     setIsClient(true);
     try {
@@ -111,19 +355,46 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       console.warn("Error reading from localStorage:", e);
     }
 
-    // Check Supabase connection
+    // Connect and load from Supabase if configured
     if (isSupabaseConfigured && supabase) {
-      Promise.resolve(
-        supabase.from("warga").select("count", { count: "exact", head: true })
-      )
-        .then(({ error }) => {
-          if (!error) setIsSupabaseOnline(true);
-        })
-        .catch(() => setIsSupabaseOnline(false));
-    }
-  }, []);
+      loadFromSupabase();
 
-  // Save to LocalStorage whenever state updates
+      // Subscribe to Realtime updates for multi-device live sync
+      const channel = supabase
+        .channel("kas-desa-realtime-channel")
+        .on("postgres_changes", { event: "*", schema: "public", table: "warga" }, () => {
+          loadFromSupabase();
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "iuran_bulanan" }, () => {
+          loadFromSupabase();
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "transaksi_kas" }, () => {
+          loadFromSupabase();
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "kegiatan_desa" }, () => {
+          loadFromSupabase();
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "absensi_kegiatan" }, () => {
+          loadFromSupabase();
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "pengaturan_desa" }, () => {
+          loadFromSupabase();
+        })
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            setIsSupabaseOnline(true);
+          }
+        });
+
+      return () => {
+        if (supabase) {
+          supabase.removeChannel(channel);
+        }
+      };
+    }
+  }, [loadFromSupabase]);
+
+  // Save to LocalStorage whenever state updates (offline cache)
   useEffect(() => {
     if (!isClient) return;
     try {
@@ -179,11 +450,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [absensiList, isClient]);
 
   // Operations
-  const updateSettings = (newSettings: Partial<DesaSettings>) => {
+  const updateSettings = async (newSettings: Partial<DesaSettings>) => {
     setSettings((prev) => ({ ...prev, ...newSettings }));
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from("pengaturan_desa").upsert({
+          id: 1,
+          ...newSettings,
+          updated_at: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.error("Gagal menyimpan pengaturan ke Supabase:", e);
+      }
+    }
   };
 
-  const addWarga = (data: Omit<Warga, "id">) => {
+  const addWarga = async (data: Omit<Warga, "id">) => {
     const id = `w-${Date.now().toString().slice(-4)}`;
     const newWarga: Warga = { ...data, id };
     setWargaList((prev) => [...prev, newWarga]);
@@ -203,21 +485,74 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       });
     }
     setIuranList((prev) => [...prev, ...newDues]);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from("warga").insert({
+          id: newWarga.id,
+          nik: newWarga.nik,
+          nama: newWarga.nama,
+          blok: newWarga.blok,
+          rt: newWarga.rt || newWarga.blok,
+          rw: newWarga.rw || "RW 01",
+          no_hp: newWarga.no_hp,
+          alamat: newWarga.alamat,
+          status_kk: newWarga.status_kk,
+          status_iuran: newWarga.status_iuran,
+          pekerjaan: newWarga.pekerjaan,
+        });
+
+        await supabase.from("iuran_bulanan").insert(
+          newDues.map((i) => ({
+            id: i.id,
+            warga_id: i.warga_id,
+            tahun: i.tahun,
+            bulan: i.bulan,
+            nominal: i.nominal,
+            status: i.status,
+            tanggal_bayar: i.tanggal_bayar,
+            metode_bayar: i.metode_bayar,
+          }))
+        );
+      } catch (e) {
+        console.error("Gagal menyimpan warga ke Supabase:", e);
+      }
+    }
   };
 
-  const updateWarga = (id: string, updated: Partial<Warga>) => {
+  const updateWarga = async (id: string, updated: Partial<Warga>) => {
     setWargaList((prev) =>
       prev.map((w) => (w.id === id ? { ...w, ...updated } : w))
     );
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const payload: Record<string, unknown> = { ...updated };
+        if (updated.blok) {
+          payload.rt = updated.blok;
+        }
+        await supabase.from("warga").update(payload).eq("id", id);
+      } catch (e) {
+        console.error("Gagal mengupdate warga ke Supabase:", e);
+      }
+    }
   };
 
-  const deleteWarga = (id: string) => {
+  const deleteWarga = async (id: string) => {
     setWargaList((prev) => prev.filter((w) => w.id !== id));
     setIuranList((prev) => prev.filter((i) => i.warga_id !== id));
     setAbsensiList((prev) => prev.filter((a) => a.warga_id !== id));
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from("warga").delete().eq("id", id);
+      } catch (e) {
+        console.error("Gagal menghapus warga dari Supabase:", e);
+      }
+    }
   };
 
-  const updateIuranStatus = ({
+  const updateIuranStatus = async ({
     wargaId,
     tahun,
     bulan,
@@ -236,21 +571,24 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     tanggalBayar?: string | null;
     catatan?: string;
   }) => {
+    const warga = wargaList.find((w) => w.id === wargaId);
+    const today = new Date().toISOString().split("T")[0];
+    const isNowLunas = status === "lunas";
+
+    let recordToSave: IuranBulanan | null = null;
+    let newTxToSave: TransaksiKas | null = null;
+
     setIuranList((prev) => {
       const existingIdx = prev.findIndex(
         (i) => i.warga_id === wargaId && i.tahun === tahun && i.bulan === bulan
       );
 
-      const warga = wargaList.find((w) => w.id === wargaId);
-      const today = new Date().toISOString().split("T")[0];
-
       if (existingIdx >= 0) {
         const updated = [...prev];
         const old = updated[existingIdx];
-        const isNowLunas = status === "lunas";
         const wasLunas = old.status === "lunas";
 
-        updated[existingIdx] = {
+        const rec: IuranBulanan = {
           ...old,
           status,
           nominal: nominal !== undefined ? nominal : old.nominal,
@@ -262,8 +600,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             ? old.kwitansi_no || `KW-${tahun}-${String(bulan).padStart(2, "0")}-${wargaId.toUpperCase()}`
             : undefined,
         };
+        updated[existingIdx] = rec;
+        recordToSave = rec;
 
-        // If newly marked as lunas, optionally log transaction to general cash
         if (isNowLunas && !wasLunas) {
           addTransaksi({
             tanggal: tanggalBayar || today,
@@ -277,8 +616,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         return updated;
       } else {
-        const isNowLunas = status === "lunas";
-        const newRecord: IuranBulanan = {
+        const rec: IuranBulanan = {
           id: `iuran-${wargaId}-${bulan}-${tahun}`,
           warga_id: wargaId,
           tahun,
@@ -293,26 +631,48 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             ? `KW-${tahun}-${String(bulan).padStart(2, "0")}-${wargaId.toUpperCase()}`
             : undefined,
         };
+        recordToSave = rec;
 
         if (isNowLunas) {
           addTransaksi({
             tanggal: tanggalBayar || today,
             tipe: "pemasukan",
             kategori: "Iuran Bulanan",
-            nominal: newRecord.nominal,
+            nominal: rec.nominal,
             uraian: `Iuran Bulanan ${warga?.nama || "Warga"} - Bln ${bulan}/${tahun}`,
             penanggung_jawab: settings.bendahara,
           });
         }
 
-        return [...prev, newRecord];
+        return [...prev, rec];
       }
     });
+
+    if (isSupabaseConfigured && supabase && recordToSave) {
+      try {
+        const rec = recordToSave as IuranBulanan;
+        await supabase.from("iuran_bulanan").upsert({
+          id: rec.id,
+          warga_id: rec.warga_id,
+          tahun: rec.tahun,
+          bulan: rec.bulan,
+          nominal: rec.nominal,
+          status: rec.status,
+          tanggal_bayar: rec.tanggal_bayar,
+          metode_bayar: rec.metode_bayar,
+          catatan: rec.catatan,
+          dicatat_oleh: rec.dicatat_oleh,
+          kwitansi_no: rec.kwitansi_no,
+        });
+      } catch (e) {
+        console.error("Gagal mengupdate status iuran di Supabase:", e);
+      }
+    }
   };
 
-  const addTransaksi = (data: Omit<TransaksiKas, "id" | "saldo_setelah">) => {
+  const addTransaksi = async (data: Omit<TransaksiKas, "id" | "saldo_setelah">) => {
+    let newTx: TransaksiKas | null = null;
     setTransaksiList((prev) => {
-      // Calculate new running balance
       const currentSaldo = prev.reduce((acc, t) => {
         return t.tipe === "pemasukan" ? acc + t.nominal : acc - t.nominal;
       }, 0);
@@ -320,7 +680,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const delta = data.tipe === "pemasukan" ? data.nominal : -data.nominal;
       const newSaldo = currentSaldo + delta;
 
-      const newTx: TransaksiKas = {
+      newTx = {
         ...data,
         id: `tx-${Date.now().toString().slice(-5)}`,
         saldo_setelah: newSaldo,
@@ -328,18 +688,32 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       };
       return [...prev, newTx];
     });
+
+    if (isSupabaseConfigured && supabase && newTx) {
+      try {
+        await supabase.from("transaksi_kas").insert(newTx);
+      } catch (e) {
+        console.error("Gagal mencatat transaksi ke Supabase:", e);
+      }
+    }
   };
 
-  const deleteTransaksi = (id: string) => {
+  const deleteTransaksi = async (id: string) => {
     setTransaksiList((prev) => prev.filter((t) => t.id !== id));
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from("transaksi_kas").delete().eq("id", id);
+      } catch (e) {
+        console.error("Gagal menghapus transaksi dari Supabase:", e);
+      }
+    }
   };
 
-  const addKegiatan = (kg: Omit<KegiatanDesa, "id">) => {
+  const addKegiatan = async (kg: Omit<KegiatanDesa, "id">) => {
     const id = `kg-${Date.now().toString().slice(-4)}`;
     const newKg: KegiatanDesa = { ...kg, id };
     setKegiatanList((prev) => [newKg, ...prev]);
 
-    // Pre-populate absensi list with default entries for active residents
     const initialAbs: AbsensiRecord[] = wargaList.map((w) => ({
       id: `ab-${id}-${w.id}`,
       kegiatan_id: id,
@@ -349,66 +723,113 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       keterangan: "",
     }));
     setAbsensiList((prev) => [...prev, ...initialAbs]);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from("kegiatan_desa").insert(newKg);
+        await supabase.from("absensi_kegiatan").insert(initialAbs);
+      } catch (e) {
+        console.error("Gagal menambah kegiatan ke Supabase:", e);
+      }
+    }
   };
 
-  const updateKegiatan = (id: string, updated: Partial<KegiatanDesa>) => {
+  const updateKegiatan = async (id: string, updated: Partial<KegiatanDesa>) => {
     setKegiatanList((prev) =>
       prev.map((k) => (k.id === id ? { ...k, ...updated } : k))
     );
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from("kegiatan_desa").update(updated).eq("id", id);
+      } catch (e) {
+        console.error("Gagal mengupdate kegiatan di Supabase:", e);
+      }
+    }
   };
 
-  const deleteKegiatan = (id: string) => {
+  const deleteKegiatan = async (id: string) => {
     setKegiatanList((prev) => prev.filter((k) => k.id !== id));
     setAbsensiList((prev) => prev.filter((a) => a.kegiatan_id !== id));
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from("kegiatan_desa").delete().eq("id", id);
+      } catch (e) {
+        console.error("Gagal menghapus kegiatan dari Supabase:", e);
+      }
+    }
   };
 
-  const updateAbsensi = (
+  const updateAbsensi = async (
     kegiatanId: string,
     wargaId: string,
     status: StatusKehadiran,
     keterangan?: string
   ) => {
+    let recordToSave: AbsensiRecord | null = null;
+    const currentTime = new Date().toLocaleTimeString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
     setAbsensiList((prev) => {
       const idx = prev.findIndex(
         (a) => a.kegiatan_id === kegiatanId && a.warga_id === wargaId
       );
-      const currentTime = new Date().toLocaleTimeString("id-ID", {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
 
       if (idx >= 0) {
         const copy = [...prev];
-        copy[idx] = {
+        const rec = {
           ...copy[idx],
           status,
           waktu_absen: status === "alpa" ? "-" : (copy[idx].waktu_absen || currentTime),
           keterangan: keterangan !== undefined ? keterangan : copy[idx].keterangan,
         };
+        copy[idx] = rec;
+        recordToSave = rec;
         return copy;
       } else {
-        return [
-          ...prev,
-          {
-            id: `ab-${kegiatanId}-${wargaId}`,
-            kegiatan_id: kegiatanId,
-            warga_id: wargaId,
-            status,
-            waktu_absen: status === "alpa" ? "-" : currentTime,
-            keterangan: keterangan || "",
-          },
-        ];
+        const rec = {
+          id: `ab-${kegiatanId}-${wargaId}`,
+          kegiatan_id: kegiatanId,
+          warga_id: wargaId,
+          status,
+          waktu_absen: status === "alpa" ? "-" : currentTime,
+          keterangan: keterangan || "",
+        };
+        recordToSave = rec;
+        return [...prev, rec];
       }
     });
+
+    if (isSupabaseConfigured && supabase && recordToSave) {
+      try {
+        await supabase.from("absensi_kegiatan").upsert(recordToSave);
+      } catch (e) {
+        console.error("Gagal mengupdate absensi di Supabase:", e);
+      }
+    }
   };
 
-  const batchSetAbsensi = (kegiatanId: string, status: StatusKehadiran) => {
+  const batchSetAbsensi = async (kegiatanId: string, status: StatusKehadiran) => {
     setAbsensiList((prev) =>
       prev.map((a) => (a.kegiatan_id === kegiatanId ? { ...a, status } : a))
     );
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from("absensi_kegiatan")
+          .update({ status })
+          .eq("kegiatan_id", kegiatanId);
+      } catch (e) {
+        console.error("Gagal batch update absensi di Supabase:", e);
+      }
+    }
   };
 
-  const resetToDefaultData = () => {
+  const resetToDefaultData = async () => {
     setSettings(initialSettings);
     setWargaList(initialWarga);
     setIuranList(initialIuran);
@@ -420,57 +841,33 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch (e) {
       console.error(e);
     }
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        // Re-seed Supabase
+        await seedInitialDataToSupabase();
+      } catch (e) {
+        console.error("Gagal reset data di Supabase:", e);
+      }
+    }
   };
 
   const syncWithSupabase = async () => {
     if (!isSupabaseConfigured || !supabase) {
       return {
         success: false,
-        message: "Supabase belum dikonfigurasi. Atur NEXT_PUBLIC_SUPABASE_URL & KEY di file .env.local",
+        message: "Supabase belum terhubung. Konfigurasikan NEXT_PUBLIC_SUPABASE_URL & ANON_KEY di Vercel atau .env.local.",
       };
     }
 
     setIsSyncing(true);
     try {
-      // Sync warga
-      const { error: wargaErr } = await supabase.from("warga").upsert(
-        wargaList.map((w) => ({
-          id: w.id,
-          nik: w.nik,
-          nama: w.nama,
-          rt: w.rt,
-          rw: w.rw,
-          no_hp: w.no_hp,
-          alamat: w.alamat,
-          status_kk: w.status_kk,
-          status_iuran: w.status_iuran,
-          pekerjaan: w.pekerjaan,
-        }))
-      );
-      if (wargaErr) throw wargaErr;
-
-      // Sync iuran
-      const { error: iuranErr } = await supabase.from("iuran_bulanan").upsert(
-        iuranList.map((i) => ({
-          id: i.id,
-          warga_id: i.warga_id,
-          tahun: i.tahun,
-          bulan: i.bulan,
-          nominal: i.nominal,
-          status: i.status,
-          tanggal_bayar: i.tanggal_bayar,
-          metode_bayar: i.metode_bayar,
-          catatan: i.catatan,
-          dicatat_oleh: i.dicatat_oleh,
-          kwitansi_no: i.kwitansi_no,
-        }))
-      );
-      if (iuranErr) throw iuranErr;
-
+      await seedInitialDataToSupabase();
+      await loadFromSupabase();
       setIsSupabaseOnline(true);
       return {
         success: true,
-        message: "Sinkronisasi berhasil! Data tersimpan di Supabase Cloud.",
+        message: "Sinkronisasi berhasil! Data tersimpan di Supabase Cloud & tersinkronkan.",
       };
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
@@ -494,7 +891,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const totalKas = totalPemasukan - totalPengeluaran;
 
-  // Current month stats (Bulan 11 / November 2026)
   const currentMonth = 11;
   const currentYear = settings.tahun_aktif;
 
@@ -520,7 +916,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     })
     .reduce((sum, t) => sum + t.nominal, 0);
 
-  // Dues percentage for current month
   const activeWarga = wargaList.filter((w) => w.status_iuran === "aktif");
   const paidDuesThisMonth = iuranList.filter(
     (i) =>
@@ -533,7 +928,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     ? Math.round((paidDuesThisMonth / activeWarga.length) * 100)
     : 0;
 
-  // Average attendance rate
   const totalPresensiRecords = absensiList.length;
   const totalHadir = absensiList.filter((a) => a.status === "hadir").length;
   const tingkatKehadiranRataRata = totalPresensiRecords > 0

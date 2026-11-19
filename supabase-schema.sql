@@ -6,10 +6,11 @@
 -- 1. Tabel Master Warga / Kepala Keluarga
 CREATE TABLE IF NOT EXISTS warga (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-    nik VARCHAR(20) UNIQUE NOT NULL,
+    nik VARCHAR(25) UNIQUE NOT NULL,
     nama VARCHAR(150) NOT NULL,
-    rt VARCHAR(10) NOT NULL,
-    rw VARCHAR(10) NOT NULL DEFAULT 'RW 02',
+    blok VARCHAR(50) DEFAULT 'Blok A1',
+    rt VARCHAR(50) NOT NULL DEFAULT 'Blok A1',
+    rw VARCHAR(50) NOT NULL DEFAULT 'RW 01',
     no_hp VARCHAR(25),
     alamat TEXT,
     status_kk VARCHAR(30) DEFAULT 'Kepala Keluarga',
@@ -24,7 +25,7 @@ CREATE TABLE IF NOT EXISTS iuran_bulanan (
     warga_id TEXT REFERENCES warga(id) ON DELETE CASCADE,
     tahun INTEGER NOT NULL,
     bulan INTEGER NOT NULL CHECK (bulan BETWEEN 1 AND 12),
-    nominal NUMERIC(12, 2) NOT NULL DEFAULT 25000,
+    nominal NUMERIC(12, 2) NOT NULL DEFAULT 35000,
     status VARCHAR(20) NOT NULL DEFAULT 'belum' CHECK (status IN ('lunas', 'belum', 'bebas')),
     tanggal_bayar DATE,
     metode_bayar VARCHAR(20) CHECK (metode_bayar IN ('tunai', 'transfer', 'qris')),
@@ -78,19 +79,24 @@ CREATE TABLE IF NOT EXISTS absensi_kegiatan (
 -- 6. Tabel Profil & Konfigurasi Desa
 CREATE TABLE IF NOT EXISTS pengaturan_desa (
     id INTEGER PRIMARY KEY DEFAULT 1,
-    nama_desa VARCHAR(100) NOT NULL DEFAULT 'Desa Sukamaju',
-    dusun VARCHAR(100) DEFAULT 'Dusun Krajan',
-    rw VARCHAR(20) DEFAULT 'RW 02',
-    kecamatan VARCHAR(100) DEFAULT 'Kecamatan Harapan Makmur',
-    kabupaten VARCHAR(100) DEFAULT 'Kabupaten Nusantara',
+    nama_desa VARCHAR(150) NOT NULL DEFAULT 'Villa Danupayan Permai',
+    dusun VARCHAR(100) DEFAULT 'Villa Danupayan Permai',
+    rw VARCHAR(20) DEFAULT 'RW 01',
+    kecamatan VARCHAR(100) DEFAULT 'Kecamatan Bulu',
+    kabupaten VARCHAR(100) DEFAULT 'Kabupaten Temanggung',
     provinsi VARCHAR(100) DEFAULT 'Jawa Tengah',
-    kepala_desa VARCHAR(150) DEFAULT 'H. Bambang Sugiarto, S.IP',
+    kepala_desa VARCHAR(150) DEFAULT 'Drs. H. Mulyono',
     bendahara VARCHAR(150) DEFAULT 'Ahmad Fauzi, S.E.',
     sekretaris VARCHAR(150) DEFAULT 'Dian Wahyuni, S.Kom',
-    nominal_iuran_bulanan NUMERIC(10, 2) DEFAULT 25000,
+    nominal_iuran_bulanan NUMERIC(10, 2) DEFAULT 35000,
     tahun_aktif INTEGER DEFAULT 2026,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- Insert row default pengaturan desa jika belum ada
+INSERT INTO pengaturan_desa (id, nama_desa, dusun, rw, kecamatan, kabupaten, provinsi, kepala_desa, bendahara, sekretaris, nominal_iuran_bulanan, tahun_aktif)
+VALUES (1, 'Villa Danupayan Permai', 'Villa Danupayan Permai', 'RW 01', 'Kecamatan Bulu', 'Kabupaten Temanggung', 'Jawa Tengah', 'Drs. H. Mulyono', 'Ahmad Fauzi, S.E.', 'Dian Wahyuni, S.Kom', 35000, 2026)
+ON CONFLICT (id) DO NOTHING;
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE warga ENABLE ROW LEVEL SECURITY;
@@ -100,27 +106,47 @@ ALTER TABLE kegiatan_desa ENABLE ROW LEVEL SECURITY;
 ALTER TABLE absensi_kegiatan ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pengaturan_desa ENABLE ROW LEVEL SECURITY;
 
--- Buat Kebijakan Akses (Public Read/Write untuk aplikasi sistem desa internal)
-CREATE POLICY "Public Read warga" ON warga FOR SELECT USING (true);
-CREATE POLICY "Public Insert/Update warga" ON warga FOR ALL USING (true);
+-- Kebijakan Akses (Public Read & Write agar web app Next.js dapat membaca & mengupdate data secara real-time)
+DROP POLICY IF EXISTS "Public Read warga" ON warga;
+DROP POLICY IF EXISTS "Public Insert/Update warga" ON warga;
+DROP POLICY IF EXISTS "Public All warga" ON warga;
+CREATE POLICY "Public All warga" ON warga FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Public Read iuran_bulanan" ON iuran_bulanan FOR SELECT USING (true);
-CREATE POLICY "Public Insert/Update iuran_bulanan" ON iuran_bulanan FOR ALL USING (true);
+DROP POLICY IF EXISTS "Public Read iuran_bulanan" ON iuran_bulanan;
+DROP POLICY IF EXISTS "Public Insert/Update iuran_bulanan" ON iuran_bulanan;
+DROP POLICY IF EXISTS "Public All iuran_bulanan" ON iuran_bulanan;
+CREATE POLICY "Public All iuran_bulanan" ON iuran_bulanan FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Public Read transaksi_kas" ON transaksi_kas FOR SELECT USING (true);
-CREATE POLICY "Public Insert/Update transaksi_kas" ON transaksi_kas FOR ALL USING (true);
+DROP POLICY IF EXISTS "Public Read transaksi_kas" ON transaksi_kas;
+DROP POLICY IF EXISTS "Public Insert/Update transaksi_kas" ON transaksi_kas;
+DROP POLICY IF EXISTS "Public All transaksi_kas" ON transaksi_kas;
+CREATE POLICY "Public All transaksi_kas" ON transaksi_kas FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Public Read kegiatan_desa" ON kegiatan_desa FOR SELECT USING (true);
-CREATE POLICY "Public Insert/Update kegiatan_desa" ON kegiatan_desa FOR ALL USING (true);
+DROP POLICY IF EXISTS "Public Read kegiatan_desa" ON kegiatan_desa;
+DROP POLICY IF EXISTS "Public Insert/Update kegiatan_desa" ON kegiatan_desa;
+DROP POLICY IF EXISTS "Public All kegiatan_desa" ON kegiatan_desa;
+CREATE POLICY "Public All kegiatan_desa" ON kegiatan_desa FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Public Read absensi_kegiatan" ON absensi_kegiatan FOR SELECT USING (true);
-CREATE POLICY "Public Insert/Update absensi_kegiatan" ON absensi_kegiatan FOR ALL USING (true);
+DROP POLICY IF EXISTS "Public Read absensi_kegiatan" ON absensi_kegiatan;
+DROP POLICY IF EXISTS "Public Insert/Update absensi_kegiatan" ON absensi_kegiatan;
+DROP POLICY IF EXISTS "Public All absensi_kegiatan" ON absensi_kegiatan;
+CREATE POLICY "Public All absensi_kegiatan" ON absensi_kegiatan FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Public Read pengaturan_desa" ON pengaturan_desa FOR SELECT USING (true);
-CREATE POLICY "Public Insert/Update pengaturan_desa" ON pengaturan_desa FOR ALL USING (true);
+DROP POLICY IF EXISTS "Public Read pengaturan_desa" ON pengaturan_desa;
+DROP POLICY IF EXISTS "Public Insert/Update pengaturan_desa" ON pengaturan_desa;
+DROP POLICY IF EXISTS "Public All pengaturan_desa" ON pengaturan_desa;
+CREATE POLICY "Public All pengaturan_desa" ON pengaturan_desa FOR ALL USING (true) WITH CHECK (true);
 
 -- Indexes untuk akselerasi query matriks iuran dan rekap absensi
 CREATE INDEX IF NOT EXISTS idx_iuran_tahun_bulan ON iuran_bulanan(tahun, bulan);
 CREATE INDEX IF NOT EXISTS idx_iuran_warga_id ON iuran_bulanan(warga_id);
 CREATE INDEX IF NOT EXISTS idx_transaksi_tanggal ON transaksi_kas(tanggal);
 CREATE INDEX IF NOT EXISTS idx_absensi_kegiatan_id ON absensi_kegiatan(kegiatan_id);
+
+-- Aktifkan Supabase Realtime Replication agar perubahan data otomatis sinkron ke perangkat lain secara live
+ALTER PUBLICATION supabase_realtime ADD TABLE warga;
+ALTER PUBLICATION supabase_realtime ADD TABLE iuran_bulanan;
+ALTER PUBLICATION supabase_realtime ADD TABLE transaksi_kas;
+ALTER PUBLICATION supabase_realtime ADD TABLE kegiatan_desa;
+ALTER PUBLICATION supabase_realtime ADD TABLE absensi_kegiatan;
+ALTER PUBLICATION supabase_realtime ADD TABLE pengaturan_desa;
