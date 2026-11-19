@@ -1,0 +1,50 @@
+import * as React from "react";
+import { cn } from "@/lib/utils";
+
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: "default" | "primary" | "secondary" | "outline" | "ghost" | "destructive" | "success";
+  size?: "default" | "sm" | "lg" | "icon";
+}
+
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant = "default", size = "default", ...props }, ref) => {
+    const baseStyles =
+      "inline-flex items-center justify-center font-medium rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:pointer-events-none disabled:opacity-50 select-none active:scale-[0.98]";
+
+    const variants = {
+      default:
+        "bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 shadow-sm",
+      primary:
+        "bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 shadow-sm shadow-emerald-500/20",
+      secondary:
+        "bg-slate-100 text-slate-900 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700",
+      outline:
+        "border border-slate-200 bg-transparent hover:bg-slate-100 text-slate-800 dark:border-slate-800 dark:hover:bg-slate-800 dark:text-slate-100",
+      ghost:
+        "hover:bg-slate-100 text-slate-700 dark:hover:bg-slate-800 dark:text-slate-300",
+      destructive:
+        "bg-rose-600 text-white hover:bg-rose-700 shadow-sm shadow-rose-500/20",
+      success:
+        "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm",
+    };
+
+    const sizes = {
+      default: "h-9 px-4 py-2 text-sm",
+      sm: "h-8 rounded-md px-3 text-xs",
+      lg: "h-11 rounded-lg px-6 text-base font-semibold",
+      icon: "h-9 w-9 p-0",
+    };
+
+    return (
+      <button
+        ref={ref}
+        className={cn(baseStyles, variants[variant], sizes[size], className)}
+        {...props}
+      />
+    );
+  }
+);
+Button.displayName = "Button";
+
+export { Button };
