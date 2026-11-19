@@ -43,7 +43,7 @@ Aplikasi web modern berbasis **Next.js (App Router)**, **Tailwind CSS**, **shadc
 - **Format Cetak Resmi (Print / PDF)**:
   - Dilengkapi **Kop Surat Resmi Pemerintah Desa & RW**.
   - Nomor surat Berita Acara / LPJ resmi.
-  - Tanda tangan resmi berjenjang: **Bendahara**, **Sekretaris RW**, dan **Kepala Desa**.
+  - Tanda tangan resmi berjenjang: **Bendahara**, **Sekretaris RW/Lingkungan**, dan **Ketua Paguyuban**.
 
 ### 7. 🌓 Toggle Dark / Light Mode
 - Pilihan mode tampilan: **Terang (Light)**, **Gelap (Dark)**, atau **Ikuti Sistem (System)** dengan transisi mulus berbasis `next-themes`.

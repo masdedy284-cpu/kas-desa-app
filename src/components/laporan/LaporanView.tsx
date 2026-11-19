@@ -256,25 +256,25 @@ export function LaporanView() {
               <p className="font-semibold">Bendahara Kas Sosial</p>
               <div className="h-20" />
               <p className="font-bold underline uppercase">{settings.bendahara}</p>
-              <p className="text-[10px] text-slate-500">NIP/NIK Desa Sukamaju</p>
+              <p className="text-[10px] text-slate-500">Pengurus {settings.nama_desa}</p>
             </div>
 
             {/* Center: Sekretaris */}
             <div className="w-52">
               <p>Diperiksa Oleh,</p>
-              <p className="font-semibold">Sekretaris RW 02</p>
+              <p className="font-semibold">Sekretaris {settings.rw || "Lingkungan"}</p>
               <div className="h-20" />
               <p className="font-bold underline uppercase">{settings.sekretaris}</p>
               <p className="text-[10px] text-slate-500">Perangkat Lingkungan</p>
             </div>
 
-            {/* Right: Kepala Desa */}
+            {/* Right: Ketua Paguyuban */}
             <div className="w-52">
               <p>{settings.nama_desa}, {currentDateStr || "November 2026"}</p>
-              <p className="font-semibold">Mengetahui, Kepala Desa</p>
+              <p className="font-semibold">Mengetahui, Ketua Paguyuban</p>
               <div className="h-20" />
               <p className="font-bold underline uppercase">{settings.kepala_desa}</p>
-              <p className="text-[10px] text-slate-500">Kepala Desa Sukamaju</p>
+              <p className="text-[10px] text-slate-500">Ketua Paguyuban {settings.nama_desa}</p>
             </div>
           </div>
         </div>

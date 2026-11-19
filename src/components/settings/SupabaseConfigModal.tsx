@@ -205,7 +205,7 @@ CREATE TABLE IF NOT EXISTS absensi_kegiatan (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1 block">
-                  Nama Kepala Desa
+                  Nama Ketua Paguyuban
                 </label>
                 <Input
                   type="text"

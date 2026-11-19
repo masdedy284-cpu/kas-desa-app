@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS pengaturan_desa (
     kecamatan VARCHAR(100) DEFAULT 'Kecamatan Bulu',
     kabupaten VARCHAR(100) DEFAULT 'Kabupaten Temanggung',
     provinsi VARCHAR(100) DEFAULT 'Jawa Tengah',
-    kepala_desa VARCHAR(150) DEFAULT 'Drs. H. Mulyono',
+    kepala_desa VARCHAR(150) DEFAULT 'Drs. H. Mulyono', -- Nama Ketua Paguyuban
     bendahara VARCHAR(150) DEFAULT 'Ahmad Fauzi, S.E.',
     sekretaris VARCHAR(150) DEFAULT 'Dian Wahyuni, S.Kom',
     nominal_iuran_bulanan NUMERIC(10, 2) DEFAULT 35000,
