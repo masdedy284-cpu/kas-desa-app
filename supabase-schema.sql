@@ -143,14 +143,6 @@ CREATE INDEX IF NOT EXISTS idx_iuran_warga_id ON iuran_bulanan(warga_id);
 CREATE INDEX IF NOT EXISTS idx_transaksi_tanggal ON transaksi_kas(tanggal);
 CREATE INDEX IF NOT EXISTS idx_absensi_kegiatan_id ON absensi_kegiatan(kegiatan_id);
 
--- Aktifkan Supabase Realtime Replication agar perubahan data otomatis sinkron ke perangkat lain secara live
-ALTER PUBLICATION supabase_realtime ADD TABLE warga;
-ALTER PUBLICATION supabase_realtime ADD TABLE iuran_bulanan;
-ALTER PUBLICATION supabase_realtime ADD TABLE transaksi_kas;
-ALTER PUBLICATION supabase_realtime ADD TABLE kegiatan_desa;
-ALTER PUBLICATION supabase_realtime ADD TABLE absensi_kegiatan;
-ALTER PUBLICATION supabase_realtime ADD TABLE pengaturan_desa;
-
 -- Berikan hak akses tabel ke role anon dan authenticated (PostgREST API Supabase)
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
@@ -159,3 +151,32 @@ GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated;
+
+-- Aktifkan Supabase Realtime Replication agar perubahan data otomatis sinkron ke perangkat lain secara live
+DO $$
+BEGIN
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE warga;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE iuran_bulanan;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE transaksi_kas;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE kegiatan_desa;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE absensi_kegiatan;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE pengaturan_desa;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+END $$;
