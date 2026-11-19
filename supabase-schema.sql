@@ -150,3 +150,12 @@ ALTER PUBLICATION supabase_realtime ADD TABLE transaksi_kas;
 ALTER PUBLICATION supabase_realtime ADD TABLE kegiatan_desa;
 ALTER PUBLICATION supabase_realtime ADD TABLE absensi_kegiatan;
 ALTER PUBLICATION supabase_realtime ADD TABLE pengaturan_desa;
+
+-- Berikan hak akses tabel ke role anon dan authenticated (PostgREST API Supabase)
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated;
