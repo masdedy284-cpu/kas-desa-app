@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS iuran_bulanan (
     warga_id TEXT REFERENCES warga(id) ON DELETE CASCADE,
     tahun INTEGER NOT NULL,
     bulan INTEGER NOT NULL,
-    nominal NUMERIC(12, 2) NOT NULL DEFAULT 25000,
+    nominal NUMERIC(12, 2) NOT NULL DEFAULT 35000,
     status VARCHAR(20) NOT NULL DEFAULT 'belum',
     tanggal_bayar DATE,
     metode_bayar VARCHAR(20),

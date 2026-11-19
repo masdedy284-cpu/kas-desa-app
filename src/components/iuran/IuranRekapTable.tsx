@@ -346,7 +346,7 @@ export function IuranRekapTable() {
                             {isLunas ? (
                               <span className="flex items-center justify-center gap-0.5">
                                 <Check className="h-3 w-3 stroke-[3]" />
-                                25k
+                                {record?.nominal ? `${Math.round(record.nominal / 1000)}k` : `${Math.round(settings.nominal_iuran_bulanan / 1000)}k`}
                               </span>
                             ) : isBebas ? (
                               <span>Bebas</span>

@@ -191,7 +191,7 @@ export function PaymentModal({
                   type="number"
                   value={nominal}
                   onChange={(e) => setNominal(Number(e.target.value))}
-                  placeholder="25000"
+                  placeholder={String(settings.nominal_iuran_bulanan)}
                   className="font-semibold"
                 />
               </div>
